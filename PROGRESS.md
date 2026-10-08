@@ -10,4 +10,4 @@ Destino: GitHub Pages en la cuenta personal FelipeManrique (NO la de GH Consulto
 - [x] flujo de voz: grabar → transcripción → revisión editable → guardar; fallback a texto/dictado
 - [x] PWA: manifest, sw.js, íconos
 - [x] verificación en navegador (viewport de teléfono)
-- [ ] deploy a GitHub Pages (pedir confirmación al usuario antes de publicar)
+- [x] deploy: https://felipemanrique.github.io/mis-finanzas/ (repo FelipeManrique/mis-finanzas, rama main)

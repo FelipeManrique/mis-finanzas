@@ -466,7 +466,10 @@
         <button class="item danger" id="set-wipe">Borrar todos los datos</button>
       </div>
       <p class="footnote">${db.movs.length} movimientos guardados sólo en este dispositivo y navegador. Última copia: ${esc(last)}. Si borrás los datos del navegador o cambiás de teléfono, los recuperás importando una copia.</p>
-      <p class="footnote" style="text-align:center;margin-top:24px">Mis Finanzas · v${APP_VERSION}<br>© 2026 Felipe Manrique. Todos los derechos reservados.<br><a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--accent)">Privacidad y condiciones</a></p>`;
+      <h2 class="section-title">Versión</h2>
+      <div class="list"><div class="item"><span class="grow">Mis Finanzas<span class="sub" id="set-ver">Versión ${APP_VERSION}</span></span>
+        <button class="btn tinted small" id="set-update">Buscar actualización</button></div></div>
+      <p class="footnote" style="text-align:center;margin-top:24px">© 2026 Felipe Manrique. Todos los derechos reservados.<br><a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--accent)">Privacidad y condiciones</a></p>`;
 
     $('#set-lang').onchange = (e) => { st.lang = e.target.value; save(); };
     $('#set-auto').onchange = (e) => { st.autoSave = e.target.checked; save(); };
@@ -485,6 +488,7 @@
     $('#set-import').onclick = () => $('#import-file').click();
     bindDriveSettings();
     $('#set-wipe').onclick = wipeAll;
+    $('#set-update').onclick = (e) => checkUpdate(e.currentTarget);
   }
 
   function applyTheme() {
@@ -1544,8 +1548,34 @@
     else if (ui.tab === 'settings') renderSettings();
   }
 
+  // ---------- Buscar actualización ----------
+  // Compara la versión publicada con la instalada; si hay una nueva, renueva los archivos y recarga.
+  async function checkUpdate(btn) {
+    const reset = () => { btn.disabled = false; btn.textContent = 'Buscar actualización'; };
+    btn.disabled = true; btn.textContent = 'Buscando…';
+    try {
+      const txt = await (await fetch('app.js?t=' + Date.now(), { cache: 'no-store' })).text();
+      const remote = (txt.match(/const APP_VERSION = '(\d[\w.-]*)'/) || [])[1];
+      if (!remote) throw new Error('sin versión');
+      if (remote === APP_VERSION) { reset(); toast(`Ya tenés la última versión (${APP_VERSION})`); return; }
+      btn.textContent = 'Actualizando…';
+      const files = ['./', 'index.html', 'styles.css', 'parser.js', 'vault.js', 'app.js', 'manifest.webmanifest', 'privacidad.html'];
+      await Promise.all(files.map((f) => fetch(f, { cache: 'reload' }).catch(() => {})));
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.filter((k) => k.startsWith('finanzas-v')).map((k) => caches.delete(k)));
+      }
+      const reg = navigator.serviceWorker && await navigator.serviceWorker.getRegistration();
+      if (reg) await reg.update().catch(() => {});
+      toast(`Instalando la versión ${remote}…`);
+      setTimeout(() => location.reload(), 700);
+    } catch (e) {
+      reset(); toast('No pude buscar actualizaciones. Revisá tu conexión a internet.');
+    }
+  }
+
   // ---------- Inicio ----------
-  const APP_VERSION = '2.0.0';
+  const APP_VERSION = '2.1.0';
   function init() {
     applyTheme();
     $$('.tab').forEach((t) => (t.onclick = () => go(t.dataset.tab)));

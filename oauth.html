@@ -26,7 +26,7 @@
   <div class="mark" id="mark"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 6v6l4 2"/></svg></div>
   <h1 id="title">Conectando…</h1>
   <p id="msg">Un segundo.</p>
-  <a href="./" id="back" hidden>Volver a Mis Finanzas</a>
+  <a href="javascript:history.length>1?history.back():location.assign('./')" id="back" hidden>Volver a la app</a>
 </main>
 <script>
 (async function () {
@@ -51,7 +51,7 @@
     const res = await fetch(BROKER_URL, { method: 'POST', body: JSON.stringify({ action: 'exchange', code, session }) });
     const r = JSON.parse(await res.text());
     if (!r.ok) throw new Error(r.error);
-    show(true, 'Listo', 'Tu cuenta de Google quedó conectada. Volvé a Mis Finanzas para terminar.');
+    show(true, 'Listo', 'Tu cuenta de Google quedó conectada. Volvé a la app para terminar.');
   } catch (e) {
     show(false, 'No se conectó', 'Google no aceptó el inicio de sesión. Volvé a intentarlo desde Ajustes.');
   }

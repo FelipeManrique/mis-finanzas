@@ -1,6 +1,6 @@
 /* Mis Finanzas — Copyright (c) 2026 Felipe Manrique. Todos los derechos reservados. Ver LICENSE. */
 // Cache de la app para que abra sin conexión. Subí VERSION en cada deploy.
-const VERSION = 'finanzas-v2.0.1';
+const VERSION = 'finanzas-v2.0.2';
 const SHELL = ['./', 'index.html', 'styles.css', 'parser.js', 'vault.js', 'app.js', 'privacidad.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/icon-32.png'];
 
 self.addEventListener('install', (e) => {
@@ -8,7 +8,7 @@ self.addEventListener('install', (e) => {
 });
 
 self.addEventListener('activate', (e) => {
-  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
+  e.waitUntil(caches.keys().then((keys) => Promise.all(keys.filter((k) => k.startsWith('finanzas-v') && k !== VERSION).map((k) => caches.delete(k)))).then(() => self.clients.claim()));
 });
 
 // Red primero (para recibir actualizaciones), cache si no hay conexión.

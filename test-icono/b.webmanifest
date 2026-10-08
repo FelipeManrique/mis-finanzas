@@ -1,0 +1,2 @@
+{ "name": "Prueba B", "short_name": "Prueba B", "start_url": "./b.html", "scope": "./", "display": "standalone", "id": "/mis-finanzas/test-icono/b",
+  "icons": [ { "src": "../icons/icon-192.png", "sizes": "192x192", "type": "image/png" }, { "src": "../icons/icon-512.png", "sizes": "512x512", "type": "image/png" } ] }

@@ -59,6 +59,7 @@
       return false;
     }
     if (!persistAsked && navigator.storage && navigator.storage.persist) { persistAsked = true; navigator.storage.persist().catch(() => {}); }
+    scheduleSync();
     return true;
   }
   const S = () => db.settings;
@@ -195,6 +196,14 @@
 
   function renderBackupBanner() {
     const el = $('#backup-banner');
+    if (driveOn()) {
+      const st = driveState();
+      if (st.level === 'error') {
+        el.innerHTML = `<div class="banner">${ICON.warn}<div>Copia en Drive: ${esc(st.text)} <button id="bk-fix">Revisar</button></div></div>`;
+        $('#bk-fix').onclick = () => go('settings');
+      } else el.innerHTML = '';
+      return;
+    }
     const n = db.movs.length;
     const last = S().lastBackup ? new Date(S().lastBackup) : null;
     const stale = !last || (Date.now() - last.getTime()) > 30 * 864e5;
@@ -430,6 +439,8 @@
       </div>
       <p class="footnote">Cada categoría tiene palabras clave. Si decís una de esas palabras, el movimiento cae en esa categoría.</p>
 
+      ${driveSettingsHtml()}
+
       <h2 class="section-title">Tus datos</h2>
       <div class="list">
         <button class="item link" id="set-export-json">Exportar copia de seguridad</button>
@@ -452,6 +463,7 @@
     $('#set-export-json').onclick = exportJSON;
     $('#set-export-csv').onclick = exportCSV;
     $('#set-import').onclick = () => $('#import-file').click();
+    bindDriveSettings();
     $('#set-wipe').onclick = wipeAll;
   }
 
@@ -948,7 +960,7 @@
     openSheet({
       title: 'Borrar todo', right: '',
       render(body) {
-        body.innerHTML = `<p class="footnote" style="font-size:15px;color:var(--label)">Se borran los ${db.movs.length} movimientos y tus ajustes de este dispositivo. No se puede deshacer. Si querés conservarlos, exportá una copia antes.</p>
+        body.innerHTML = `<p class="footnote" style="font-size:15px;color:var(--label)">Se borran los ${db.movs.length} movimientos y tus ajustes de este dispositivo. No se puede deshacer. Si querés conservarlos, exportá una copia antes.${driveOn() ? ' La copia en Drive no se borra.' : ''}</p>
           <button class="btn tinted" id="w-bk">Exportar copia primero</button>
           <button class="btn danger" id="w-go">Borrar todos los datos</button>`;
         $('#w-bk').onclick = exportJSON;
@@ -959,6 +971,205 @@
         };
       }
     });
+  }
+
+  // ---------- Copia automática en Google Drive ----------
+  // La conexión (URL del servicio + clave) se guarda aparte de los datos: no viaja en copias ni se pierde al importar.
+  const DRIVE_KEY = 'finanzas-voz:drive';
+  let drive = loadDrive();
+  let syncTimer = null, retryTimer = null, syncing = false, syncAgain = false;
+
+  function loadDrive() { try { return JSON.parse(localStorage.getItem(DRIVE_KEY)) || {}; } catch (e) { return {}; } }
+  function saveDrive() {
+    try { localStorage.setItem(DRIVE_KEY, JSON.stringify(drive)); } catch (e) { /* sin almacenamiento */ }
+    renderDriveStatus();
+  }
+  const driveOn = () => !!(drive.url && drive.secret);
+  const backupPayload = () => ({ app: 'mis-finanzas', version: 1, exportedAt: new Date().toISOString(), movs: db.movs, settings: db.settings });
+
+  async function driveCall(action, extra) {
+    const res = await fetch(drive.url, { method: 'POST', body: JSON.stringify(Object.assign({ secret: drive.secret, action }, extra || {})) });
+    const txt = await res.text();
+    try { return JSON.parse(txt); } catch (e) { throw new Error('auth'); } // Google devuelve HTML si falta autorizar
+  }
+
+  function scheduleSync(delay = 2500) {
+    if (!driveOn()) return;
+    if (!drive.pending) { drive.pending = true; saveDrive(); }
+    clearTimeout(syncTimer);
+    syncTimer = setTimeout(() => syncNow(), delay);
+  }
+
+  async function syncNow(force) {
+    if (!driveOn() || (!drive.pending && !force)) return;
+    if (!navigator.onLine) { drive.lastError = 'offline'; saveDrive(); return; }
+    if (syncing) { syncAgain = true; return; }
+    syncing = true; clearTimeout(retryTimer);
+    drive.pending = false; renderDriveStatus();
+    try {
+      const r = await driveCall('backup', { data: backupPayload(), force: !!force });
+      if (r.ok) { drive.lastAt = r.savedAt || new Date().toISOString(); drive.lastError = null; if (r.folderUrl) drive.folderUrl = r.folderUrl; }
+      else if (r.error === 'would_empty') drive.lastError = 'would_empty';
+      else { drive.pending = true; drive.lastError = r.error === 'unauthorized' ? 'unauthorized' : 'server'; }
+    } catch (e) {
+      drive.pending = true;
+      drive.lastError = e.message === 'auth' ? 'auth' : navigator.onLine ? 'server' : 'offline';
+    }
+    syncing = false; saveDrive();
+    if (syncAgain) { syncAgain = false; scheduleSync(500); }
+    else if (drive.pending && drive.lastError === 'server') retryTimer = setTimeout(() => syncNow(), 60000);
+  }
+
+  // Al cerrar o salir de la app con cambios sin subir, último intento (sin esperar respuesta).
+  function beaconSync() {
+    if (!driveOn() || !drive.pending || !navigator.sendBeacon) return;
+    try { navigator.sendBeacon(drive.url, new Blob([JSON.stringify({ secret: drive.secret, action: 'backup', data: backupPayload() })], { type: 'text/plain' })); } catch (e) { /* se reintenta al volver */ }
+  }
+
+  function relTime(iso) {
+    const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
+    if (s < 60) return 'recién';
+    if (s < 3600) return `hace ${Math.round(s / 60)} min`;
+    if (s < 86400) return `hace ${Math.round(s / 3600)} h`;
+    return new Date(iso).toLocaleDateString('es-AR', { day: 'numeric', month: 'short' }).replace('.', '');
+  }
+  function driveState() {
+    if (!driveOn()) return { level: 'off', text: '' };
+    if (syncing) return { level: 'busy', text: 'Subiendo copia…' };
+    const e = drive.lastError;
+    if (e === 'auth') return { level: 'error', text: 'Falta autorizar el acceso a tu Drive.' };
+    if (e === 'unauthorized') return { level: 'error', text: 'El código de conexión no es válido. Volvé a conectar.' };
+    if (e === 'would_empty') return { level: 'error', text: 'No subí nada: la app está vacía y tu Drive tiene datos. Restaurá desde Drive.' };
+    if (drive.pending && e === 'offline') return { level: 'pending', text: 'Sin conexión. Se sube sola cuando vuelva internet.' };
+    if (drive.pending && e === 'server') return { level: 'pending', text: 'No se pudo subir. Reintento en un minuto.' };
+    if (drive.pending) return { level: 'pending', text: 'Hay cambios por subir.' };
+    if (drive.lastAt) return { level: 'ok', text: `Copia al día · ${relTime(drive.lastAt)}` };
+    return { level: 'ok', text: 'Conectado. La copia se sube con el próximo cambio.' };
+  }
+  function renderDriveStatus() {
+    const st = driveState();
+    const b = $('#btn-cloud');
+    if (b) {
+      b.hidden = st.level === 'off';
+      b.dataset.level = st.level;
+      b.setAttribute('aria-label', 'Copia en Drive: ' + st.text);
+      b.title = st.text;
+    }
+    const s = $('#drv-status');
+    if (s) s.textContent = st.text;
+  }
+
+  function decodeCode(code) {
+    const m = String(code || '').trim().match(/MF1\.([A-Za-z0-9_-]+)/);
+    if (!m) return null;
+    try {
+      const j = JSON.parse(atob(m[1].replace(/-/g, '+').replace(/_/g, '/')));
+      return j.u && j.s && /^https:\/\/script\.google\.com\//.test(j.u) ? { url: j.u, secret: j.s } : null;
+    } catch (e) { return null; }
+  }
+
+  async function connectDrive(code) {
+    const c = decodeCode(code);
+    if (!c) return { ok: false, msg: 'Ese código no es válido. Copialo completo, empieza con “MF1.”.' };
+    const prev = drive;
+    drive = { url: c.url, secret: c.secret };
+    try {
+      const r = await driveCall('ping');
+      if (!r.ok) { drive = prev; return { ok: false, msg: 'El servicio rechazó el código. Revisá que sea el último que te pasaron.' }; }
+      drive.folderUrl = r.folderUrl; saveDrive();
+      return { ok: true };
+    } catch (e) {
+      if (!navigator.onLine) { drive = prev; return { ok: false, msg: 'No hay conexión a internet. Probá de nuevo cuando tengas.' }; }
+      // sin autorizar, Google responde una página que el navegador bloquea: se ve igual que un error de red
+      drive.lastError = 'auth'; saveDrive();
+      return { ok: false, auth: true, msg: 'Falta un paso: autorizar que el servicio escriba en tu Drive.' };
+    }
+  }
+
+  function openDriveConnect(prefill) {
+    openSheet({
+      title: 'Conectar Google Drive', right: '',
+      render(body) {
+        body.innerHTML = `<p class="footnote" style="font-size:15px;color:var(--label);margin:0">Pegá el código de conexión. Desde ese momento, cada cambio se guarda solo en la carpeta “Mis Finanzas - copias” de tu Drive.</p>
+          <div class="text-entry"><textarea id="drv-code" placeholder="MF1.…" autocapitalize="off" autocomplete="off" spellcheck="false">${esc(prefill || '')}</textarea>
+          <button class="btn" id="drv-go">Conectar</button></div>
+          <div id="drv-msg"></div>`;
+        const go = async () => {
+          const btn = $('#drv-go'); btn.disabled = true; btn.textContent = 'Conectando…';
+          const r = await connectDrive($('#drv-code').value);
+          btn.disabled = false; btn.textContent = 'Conectar';
+          if (r.ok) { afterConnect(); return; }
+          $('#drv-msg').innerHTML = `<div class="banner" style="margin:0">${ICON.warn}<div>${esc(r.msg)}${r.auth ? `<ol style="margin:8px 0 0;padding-left:20px;display:grid;gap:4px"><li><a href="${esc(drive.url)}" target="_blank" rel="noopener">Abrí este enlace</a> con tu cuenta de Google.</li><li>Tocá “Revisar permisos”, elegí tu cuenta y aceptá.</li><li>Cuando diga “Listo”, volvé acá y tocá Conectar otra vez.</li></ol>` : ''}</div></div>`;
+        };
+        $('#drv-go').onclick = go;
+        if (prefill) go();
+      }
+    });
+  }
+
+  function afterConnect() {
+    toast('Google Drive conectado');
+    if (db.movs.length) { closeSheet(); scheduleSync(300); go('settings'); }
+    else openDriveRestore(true);
+  }
+
+  function openDriveRestore(fromConnect) {
+    openSheet({
+      title: 'Restaurar desde Drive', right: '', left: fromConnect ? 'Ahora no' : 'Cancelar',
+      onLeft() { closeSheet(); go('settings'); },
+      render(body) {
+        body.innerHTML = `<p class="footnote" style="font-size:15px;color:var(--label);margin:0">${fromConnect ? 'Este dispositivo no tiene movimientos. ¿Querés traer los que guardaste en Drive?' : `Trae la última copia guardada en Drive y reemplaza los ${db.movs.length} movimientos de este dispositivo.`}</p>
+          <button class="btn ${fromConnect ? '' : 'danger'}" id="rs-go">Traer mis datos de Drive</button><div id="rs-msg"></div>`;
+        const b = $('#rs-go');
+        b.onclick = async () => {
+          if (!fromConnect && db.movs.length && !b.classList.contains('armed')) { b.classList.add('armed'); b.textContent = 'Tocá de nuevo para reemplazar'; return; }
+          b.disabled = true; b.textContent = 'Trayendo…';
+          try {
+            const r = await driveCall('restore');
+            if (!r.ok) { b.disabled = false; b.textContent = 'Traer mis datos de Drive'; $('#rs-msg').innerHTML = `<p class="footnote">${r.error === 'empty' ? 'Todavía no hay ninguna copia en tu Drive.' : 'No pude leer la copia de Drive.'}</p>`; return; }
+            db = { movs: Array.isArray(r.data.movs) ? r.data.movs : [], settings: Object.assign(DEFAULT_SETTINGS(), r.data.settings || {}) };
+            drive.lastError = null; drive.pending = false; drive.lastAt = r.savedAt;
+            try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* sin espacio */ }
+            saveDrive(); applyTheme(); closeSheet(); go('movs');
+            toast(`${db.movs.length} movimientos recuperados de Drive`);
+          } catch (e) {
+            b.disabled = false; b.textContent = 'Traer mis datos de Drive';
+            $('#rs-msg').innerHTML = `<p class="footnote">${e.message === 'auth' ? 'Falta autorizar el acceso a Drive.' : 'No pude conectarme. Revisá internet.'}</p>`;
+          }
+        };
+      }
+    });
+  }
+
+  function driveSettingsHtml() {
+    if (!driveOn()) {
+      return `<h2 class="section-title">Copia en Google Drive</h2>
+        <div class="list"><button class="item link" id="drv-connect">Conectar Google Drive</button></div>
+        <p class="footnote">Con Drive conectado, cada cambio se guarda solo en tu Drive unos segundos después. Si no hay internet, se sube cuando vuelva.</p>`;
+    }
+    return `<h2 class="section-title">Copia en Google Drive</h2>
+      <div class="list">
+        <div class="item"><span class="grow">Estado<span class="sub" id="drv-status" style="white-space:normal"></span></span></div>
+        <button class="item link" id="drv-now">Subir copia ahora</button>
+        ${drive.folderUrl ? `<a class="item link" href="${esc(drive.folderUrl)}" target="_blank" rel="noopener" style="text-decoration:none">Abrir la carpeta en Drive</a>` : ''}
+        <button class="item link" id="drv-restore">Restaurar desde Drive</button>
+        <button class="item danger" id="drv-off">Desconectar Drive</button>
+      </div>
+      <p class="footnote">Se guarda una copia por día (los últimos 90 días) y “finanzas-ultima.json” siempre actualizada.</p>`;
+  }
+  function bindDriveSettings() {
+    const c = $('#drv-connect'); if (c) c.onclick = () => openDriveConnect('');
+    const n = $('#drv-now'); if (n) n.onclick = async () => {
+      if (drive.lastError === 'auth' || drive.lastError === 'unauthorized') { openDriveConnect(''); return; }
+      await syncNow(drive.lastError === 'would_empty' ? false : true);
+      toast(drive.lastError ? driveState().text : 'Copia subida a Drive');
+    };
+    const r = $('#drv-restore'); if (r) r.onclick = () => openDriveRestore(false);
+    const o = $('#drv-off'); if (o) o.onclick = () => {
+      if (!o.classList.contains('armed')) { o.classList.add('armed'); o.textContent = 'Tocá de nuevo para desconectar'; return; }
+      drive = {}; saveDrive(); renderSettings(); toast('Drive desconectado. Tus copias siguen en Drive.');
+    };
+    renderDriveStatus();
   }
 
   // ---------- Navegación ----------
@@ -978,7 +1189,7 @@
   }
 
   // ---------- Inicio ----------
-  const APP_VERSION = '1.0.0';
+  const APP_VERSION = '1.1.0';
   function init() {
     applyTheme();
     $$('.tab').forEach((t) => (t.onclick = () => go(t.dataset.tab)));
@@ -996,10 +1207,20 @@
     $('#q').addEventListener('input', (e) => { ui.q = e.target.value; renderList(); });
     $$('#type-filter button').forEach((b) => (b.onclick = () => { ui.type = b.dataset.f; renderMovs(); }));
     $('#import-file').onchange = (e) => { const f = e.target.files[0]; e.target.value = ''; if (f) onImportFile(f); };
-    window.addEventListener('storage', (e) => { if (e.key === KEY) { db = load(); renderAll(); } });
+    window.addEventListener('storage', (e) => { if (e.key === KEY) { db = load(); renderAll(); } if (e.key === DRIVE_KEY) { drive = loadDrive(); renderDriveStatus(); } });
+    $('#btn-cloud').onclick = () => go('settings');
+    window.addEventListener('online', () => syncNow());
+    window.addEventListener('offline', () => renderDriveStatus());
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); else beaconSync(); });
+    window.addEventListener('pagehide', beaconSync);
+    setInterval(renderDriveStatus, 60000);
 
     const hash = location.hash.slice(1);
-    go(['stats', 'accounts', 'settings'].includes(hash) ? hash : 'movs');
+    const connect = hash.match(/^conectar=(MF1\.[A-Za-z0-9_-]+)/);
+    go(['stats', 'accounts', 'settings'].includes(hash) || connect ? (connect ? 'settings' : hash) : 'movs');
+    if (connect) { try { history.replaceState(null, '', location.pathname + '#settings'); } catch (e) { /* */ } openDriveConnect(connect[1]); }
+    renderDriveStatus();
+    if (driveOn() && drive.pending) syncNow();
     if (new URLSearchParams(location.search).get('voz') === '1') setTimeout(() => openVoice(), 300);
 
     if ('serviceWorker' in navigator && location.protocol === 'https:') {

@@ -80,6 +80,12 @@ button { cursor: pointer; }
   background: var(--fill); color: var(--accent); transition: transform .15s var(--snappy);
 }
 .icon-btn:active { transform: scale(.92); }
+.top-actions { display: flex; gap: 10px; align-items: center; }
+.cloud[data-level="ok"] { color: var(--income); }
+.cloud[data-level="pending"], .cloud[data-level="busy"] { color: #C93400; }
+.cloud[data-level="busy"] svg { animation: breathe 1.2s ease-in-out infinite; }
+.cloud[data-level="error"] { color: var(--expense); background: var(--expense-tint); }
+@keyframes breathe { 50% { opacity: .35; } }
 .icon-btn svg { width: 20px; height: 20px; }
 
 .month-switch { display: flex; align-items: center; gap: 4px; margin-block: 4px 12px; }

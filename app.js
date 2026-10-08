@@ -1,3 +1,4 @@
+/* Mis Finanzas — Copyright (c) 2026 Felipe Manrique. Todos los derechos reservados. Ver LICENSE. */
 /* Mis Finanzas — app de una página, sin dependencias. Datos en localStorage de este dispositivo. */
 (function () {
   'use strict';
@@ -451,7 +452,7 @@
         <button class="item danger" id="set-wipe">Borrar todos los datos</button>
       </div>
       <p class="footnote">${db.movs.length} movimientos guardados sólo en este dispositivo y navegador. Última copia: ${esc(last)}. Si borrás los datos del navegador o cambiás de teléfono, los recuperás importando una copia.</p>
-      <p class="footnote" style="text-align:center;margin-top:24px">Mis Finanzas · v${APP_VERSION}</p>`;
+      <p class="footnote" style="text-align:center;margin-top:24px">Mis Finanzas · v${APP_VERSION}<br>© 2026 Felipe Manrique. Todos los derechos reservados.<br><a href="privacidad.html" target="_blank" rel="noopener" style="color:var(--accent)">Privacidad y condiciones</a></p>`;
 
     $('#set-lang').onchange = (e) => { st.lang = e.target.value; save(); };
     $('#set-auto').onchange = (e) => { st.autoSave = e.target.checked; save(); };
@@ -1461,7 +1462,7 @@
   }
 
   // ---------- Inicio ----------
-  const APP_VERSION = '1.2.0';
+  const APP_VERSION = '1.2.1';
   function init() {
     applyTheme();
     $$('.tab').forEach((t) => (t.onclick = () => go(t.dataset.tab)));

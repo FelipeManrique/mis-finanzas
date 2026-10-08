@@ -1,5 +1,6 @@
+/* Mis Finanzas — Copyright (c) 2026 Felipe Manrique. Todos los derechos reservados. Ver LICENSE. */
 // Cache de la app para que abra sin conexión. Subí VERSION en cada deploy.
-const VERSION = 'finanzas-v1.2.0';
+const VERSION = 'finanzas-v1.2.1';
 const SHELL = ['./', 'index.html', 'styles.css', 'parser.js', 'vault.js', 'app.js', 'privacidad.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

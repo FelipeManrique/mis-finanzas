@@ -1,3 +1,4 @@
+/* Mis Finanzas — Copyright (c) 2026 Felipe Manrique. Todos los derechos reservados. Ver LICENSE. */
 /* Intérprete de frases habladas → movimientos de dinero.
    Puro (sin DOM), se usa en el navegador (window.Parser) y en los tests de Node. */
 (function (root) {

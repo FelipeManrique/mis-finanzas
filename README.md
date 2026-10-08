@@ -20,3 +20,6 @@ los datos quedan en el teléfono (localStorage) y se respaldan exportando una co
 
 ## Correr local
 python3 -m http.server 8791   →  http://localhost:8791
+
+## Licencia
+© 2026 Felipe Manrique. Todos los derechos reservados. Código visible sólo como referencia; no se permite copiar, modificar ni redistribuir. Ver [LICENSE](LICENSE).

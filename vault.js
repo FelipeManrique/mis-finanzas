@@ -1,3 +1,4 @@
+/* Mis Finanzas — Copyright (c) 2026 Felipe Manrique. Todos los derechos reservados. Ver LICENSE. */
 /* Cifrado de las copias: AES-GCM 256 con clave derivada de la contraseña (PBKDF2-SHA256).
    Lo que sube a Drive es un sobre {v, kdf, iter, salt, iv, data}; sin la contraseña no se puede leer. */
 (function (root) {

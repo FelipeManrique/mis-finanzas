@@ -1,6 +1,6 @@
 // Cache de la app para que abra sin conexión. Subí VERSION en cada deploy.
-const VERSION = 'finanzas-v1.1.1';
-const SHELL = ['./', 'index.html', 'styles.css', 'parser.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
+const VERSION = 'finanzas-v1.2.0';
+const SHELL = ['./', 'index.html', 'styles.css', 'parser.js', 'vault.js', 'app.js', 'privacidad.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(SHELL)).then(() => self.skipWaiting()));
@@ -13,7 +13,7 @@ self.addEventListener('activate', (e) => {
 // Red primero (para recibir actualizaciones), cache si no hay conexión.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin) return;
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin || new URL(req.url).pathname.endsWith('oauth.html')) return;
   e.respondWith(
     fetch(req).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }

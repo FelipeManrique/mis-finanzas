@@ -1008,7 +1008,7 @@
     drive.pending = false; renderDriveStatus();
     try {
       const r = await driveCall('backup', { data: backupPayload(), force: !!force });
-      if (r.ok) { drive.lastAt = r.savedAt || new Date().toISOString(); drive.lastError = null; if (r.folderUrl) drive.folderUrl = r.folderUrl; }
+      if (r.ok) { const had = drive.folderUrl; drive.lastAt = r.savedAt || new Date().toISOString(); drive.lastError = null; if (r.folderUrl) drive.folderUrl = r.folderUrl; if (!had && drive.folderUrl && ui.tab === 'settings' && !sheetOpen()) setTimeout(renderSettings); }
       else if (r.error === 'would_empty') drive.lastError = 'would_empty';
       else { drive.pending = true; drive.lastError = r.error === 'unauthorized' ? 'unauthorized' : 'server'; }
     } catch (e) {
@@ -1018,6 +1018,12 @@
     syncing = false; saveDrive();
     if (syncAgain) { syncAgain = false; scheduleSync(500); }
     else if (drive.pending && drive.lastError === 'server') retryTimer = setTimeout(() => syncNow(), 60000);
+  }
+
+  function retryDrive() {
+    if (!driveOn()) return;
+    if (drive.lastError === 'auth') drive.pending = true;
+    if (drive.pending) syncNow();
   }
 
   // Al cerrar o salir de la app con cambios sin subir, último intento (sin esperar respuesta).
@@ -1160,8 +1166,9 @@
   function bindDriveSettings() {
     const c = $('#drv-connect'); if (c) c.onclick = () => openDriveConnect('');
     const n = $('#drv-now'); if (n) n.onclick = async () => {
-      if (drive.lastError === 'auth' || drive.lastError === 'unauthorized') { openDriveConnect(''); return; }
-      await syncNow(drive.lastError === 'would_empty' ? false : true);
+      drive.pending = true;
+      await syncNow();
+      if (drive.lastError === 'unauthorized') { openDriveConnect(''); return; }
       toast(drive.lastError ? driveState().text : 'Copia subida a Drive');
     };
     const r = $('#drv-restore'); if (r) r.onclick = () => openDriveRestore(false);
@@ -1189,7 +1196,7 @@
   }
 
   // ---------- Inicio ----------
-  const APP_VERSION = '1.1.0';
+  const APP_VERSION = '1.1.1';
   function init() {
     applyTheme();
     $$('.tab').forEach((t) => (t.onclick = () => go(t.dataset.tab)));
@@ -1211,7 +1218,7 @@
     $('#btn-cloud').onclick = () => go('settings');
     window.addEventListener('online', () => syncNow());
     window.addEventListener('offline', () => renderDriveStatus());
-    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') syncNow(); else beaconSync(); });
+    document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') retryDrive(); else beaconSync(); });
     window.addEventListener('pagehide', beaconSync);
     setInterval(renderDriveStatus, 60000);
 
@@ -1220,7 +1227,7 @@
     go(['stats', 'accounts', 'settings'].includes(hash) || connect ? (connect ? 'settings' : hash) : 'movs');
     if (connect) { try { history.replaceState(null, '', location.pathname + '#settings'); } catch (e) { /* */ } openDriveConnect(connect[1]); }
     renderDriveStatus();
-    if (driveOn() && drive.pending) syncNow();
+    retryDrive();
     if (new URLSearchParams(location.search).get('voz') === '1') setTimeout(() => openVoice(), 300);
 
     if ('serviceWorker' in navigator && location.protocol === 'https:') {

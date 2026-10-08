@@ -1,5 +1,5 @@
 // Cache de la app para que abra sin conexión. Subí VERSION en cada deploy.
-const VERSION = 'finanzas-v1.1.0';
+const VERSION = 'finanzas-v1.1.1';
 const SHELL = ['./', 'index.html', 'styles.css', 'parser.js', 'app.js', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png'];
 
 self.addEventListener('install', (e) => {

@@ -21,6 +21,7 @@
   --glass-hi: rgba(255, 255, 255, 0.7);
   --glass-bevel: rgba(0, 0, 0, 0.05);
   --sheet-bg: #F2F2F7;
+  --sheet-card: #FFFFFF;
   --scrim: rgba(0, 0, 0, 0.32);
   --ease: cubic-bezier(0.32, 0.72, 0, 1);
   --snappy: cubic-bezier(0.36, 0.66, 0.04, 1);
@@ -36,10 +37,9 @@
     --separator: rgba(84, 84, 88, 0.6);
     --shadow-card: none; --shadow-elevated: 0 2px 6px rgba(0,0,0,.4), 0 18px 44px rgba(0,0,0,.6);
     --glass-bg: rgba(40, 40, 42, 0.6); --glass-hi: rgba(255, 255, 255, 0.14); --glass-bevel: rgba(0, 0, 0, 0.3);
-    --sheet-bg: #1C1C1E; --scrim: rgba(0, 0, 0, 0.55);
+    --sheet-bg: #1C1C1E; --sheet-card: #2C2C2E; --scrim: rgba(0, 0, 0, 0.55);
     color-scheme: dark;
   }
-  :root:not([data-theme="light"]) .sheet .card, :root:not([data-theme="light"]) .sheet .group { background: #2C2C2E; }
 }
 :root[data-theme="dark"] {
   --accent: #0A84FF; --income: #30D158; --expense: #FF453A;
@@ -49,10 +49,9 @@
   --separator: rgba(84, 84, 88, 0.6);
   --shadow-card: none; --shadow-elevated: 0 2px 6px rgba(0,0,0,.4), 0 18px 44px rgba(0,0,0,.6);
   --glass-bg: rgba(40, 40, 42, 0.6); --glass-hi: rgba(255, 255, 255, 0.14); --glass-bevel: rgba(0, 0, 0, 0.3);
-  --sheet-bg: #1C1C1E; --scrim: rgba(0, 0, 0, 0.55);
+  --sheet-bg: #1C1C1E; --sheet-card: #2C2C2E; --scrim: rgba(0, 0, 0, 0.55);
   color-scheme: dark;
 }
-:root[data-theme="dark"] .sheet .card, :root[data-theme="dark"] .sheet .group { background: #2C2C2E; }
 
 * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 html, body { margin: 0; min-height: 100%; }
@@ -345,3 +344,19 @@ button.item:active { background: var(--fill); }
 @media (min-width: 700px) {
   .app { padding-top: calc(env(safe-area-inset-top, 0px) + 32px); }
 }
+
+/* bienvenida */
+.welcome { display: grid; justify-items: center; gap: 10px; text-align: center; padding-top: 4px; }
+.welcome-logo { width: 88px; height: 88px; border-radius: 22px; box-shadow: 0 8px 24px rgba(20,104,240,.35); }
+.welcome h2 { font-size: 28px; line-height: 34px; font-weight: 700; letter-spacing: -0.02em; margin: 6px 0 0; text-wrap: balance; }
+.welcome p { margin: 0; color: var(--label-2); font-size: 16px; max-width: 34ch; text-wrap: pretty; }
+.welcome-points { display: grid; gap: 14px; background: var(--card); border-radius: var(--r-md); padding: 16px; }
+.welcome-points > div { display: flex; gap: 12px; align-items: flex-start; font-size: 15px; color: var(--label-2); }
+.welcome-points strong { color: var(--label); font-weight: 600; }
+.wp-ic { width: 30px; height: 30px; border-radius: 8px; flex: none; display: grid; place-items: center; color: #fff; }
+.wp-ic svg { width: 18px; height: 18px; }
+.warn-list { margin: 0; padding: 14px 16px 14px 34px; background: var(--card); border-radius: var(--r-md); display: grid; gap: 8px; font-size: 15px; color: var(--label-2); }
+
+/* tarjetas dentro de hojas: un escalón más claro que la hoja en modo oscuro */
+.sheet .card, .sheet .group, .sheet .banner, .sheet .warn-list, .sheet .welcome-points, .sheet .field-group,
+.sheet .said, .sheet .review-card, .sheet .text-entry textarea, .sheet .list, .sheet .cat-chips button { background: var(--sheet-card); }

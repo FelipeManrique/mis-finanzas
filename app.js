@@ -17,6 +17,8 @@
 
   const ICON = {
     google: '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true"><path fill="#fff" d="M21.6 12.2c0-.7-.1-1.4-.2-2H12v3.8h5.4a4.6 4.6 0 0 1-2 3v2.5h3.2c1.9-1.7 3-4.3 3-7.3z"/><path fill="#fff" opacity=".85" d="M12 22c2.7 0 5-.9 6.6-2.4l-3.2-2.5c-.9.6-2 1-3.4 1-2.6 0-4.8-1.8-5.6-4.1H3.1v2.6A10 10 0 0 0 12 22z"/><path fill="#fff" opacity=".7" d="M6.4 14c-.2-.6-.3-1.3-.3-2s.1-1.4.3-2V7.4H3.1a10 10 0 0 0 0 9.2L6.4 14z"/><path fill="#fff" opacity=".85" d="M12 5.9c1.5 0 2.8.5 3.8 1.5l2.9-2.9A10 10 0 0 0 3.1 7.4L6.4 10c.8-2.3 3-4.1 5.6-4.1z"/></svg>',
+    chart: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M6 19V12M12 19V6M18 19v-9"/></svg>',
+    lock: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="10.5" width="14" height="9.5" rx="2.5"/><path d="M8.5 10.5V8a3.5 3.5 0 0 1 7 0v2.5"/></svg>',
     cloud: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 18.5h10.5a4 4 0 0 0 .6-7.95A6 6 0 0 0 6.6 9.1 4.75 4.75 0 0 0 7 18.5z"/></svg>',
     mic: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21"/></svg>',
     left: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="m15 5-7 7 7 7"/></svg>',
@@ -209,10 +211,13 @@
     }
     const n = db.movs.length;
     const last = S().lastBackup ? new Date(S().lastBackup) : null;
-    const stale = !last || (Date.now() - last.getTime()) > 30 * 864e5;
-    if (n >= 15 && stale) {
-      el.innerHTML = `<div class="banner">${ICON.warn}<div>Tus datos viven sólo en este dispositivo. ${last ? 'Tu última copia es de hace más de un mes.' : 'Todavía no hiciste una copia.'} <button id="bk-now">Exportar copia</button></div></div>`;
+    // sin cuenta: recordatorio semanal de copia manual
+    const since = last || (S().firstUse ? new Date(S().firstUse) : null);
+    const stale = since && (Date.now() - since.getTime()) > 7 * 864e5;
+    if (n >= 3 && stale) {
+      el.innerHTML = `<div class="banner">${ICON.warn}<div>Tus datos están sólo en este teléfono. ${last ? 'Tu última copia es de hace más de una semana.' : 'Todavía no guardaste ninguna copia.'} <button id="bk-now">Guardar copia</button> · <button id="bk-g">Conectar Google</button></div></div>`;
       $('#bk-now').onclick = exportJSON;
+      $('#bk-g').onclick = openDriveConnect;
     } else el.innerHTML = '';
   }
 
@@ -446,7 +451,7 @@
 
       <h2 class="section-title">Tus datos</h2>
       <div class="list">
-        <button class="item link" id="set-export-json">Exportar copia de seguridad</button>
+        <button class="item link" id="set-export-json">Guardar copia en el teléfono</button>
         <button class="item link" id="set-export-csv">Exportar a planilla (CSV)</button>
         <button class="item link" id="set-import">Importar copia o CSV</button>
         <button class="item danger" id="set-wipe">Borrar todos los datos</button>
@@ -882,11 +887,21 @@
     a.href = url; a.download = name; document.body.appendChild(a); a.click(); a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 4000);
   }
-  function exportJSON() {
+  // En el teléfono abre el menú de compartir (Archivos, Drive, WhatsApp…); si no se puede, descarga el archivo.
+  async function exportJSON() {
     const data = { app: 'mis-finanzas', version: 1, exportedAt: new Date().toISOString(), movs: db.movs, settings: db.settings };
-    download(`finanzas-copia-${todayIso()}.json`, JSON.stringify(data, null, 1), 'application/json');
-    S().lastBackup = new Date().toISOString(); save(); renderAll();
-    toast('Copia exportada. Guardala en Drive o en tus archivos.');
+    const name = `finanzas-copia-${todayIso()}.json`, json = JSON.stringify(data, null, 1);
+    const done = () => { S().lastBackup = new Date().toISOString(); save(); renderAll(); };
+    try {
+      const file = new File([json], name, { type: 'application/json' });
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && /Android|iPhone|iPad|iPod/.test(navigator.userAgent)) {
+        await navigator.share({ files: [file], title: 'Copia de Mis Finanzas' });
+        done(); toast('Copia guardada');
+        return;
+      }
+    } catch (e) { if (e && e.name === 'AbortError') return; }
+    download(name, json, 'application/json');
+    done(); toast('Copia descargada. Guardala en tus archivos o en Drive.');
   }
   const CSV_COLS = ['Fecha', 'Tipo', 'Monto', 'Moneda', 'Categoría', 'Medio', 'Detalle', 'Cuotas', 'Origen', 'Texto dictado'];
   function exportCSV() {
@@ -1182,8 +1197,6 @@
     return 'https://accounts.google.com/o/oauth2/v2/auth?' + p;
   }
 
-  let pendingPassword = null; // sólo en memoria mientras se completa la conexión
-
   function passwordFields(confirm) {
     return `<div class="field-group">
         <div class="field"><label for="pw1">Contraseña</label><input id="pw1" type="password" autocomplete="${confirm ? 'new-password' : 'current-password'}" placeholder="mínimo 8 caracteres"></div>
@@ -1191,32 +1204,29 @@
       </div>`;
   }
 
+  // Botón "Continuar con Google": un enlace real (en iPhone sólo así se abre Google desde la app instalada).
+  function googleButton(id) {
+    return `<a class="btn" id="${id}" href="#" role="button" style="display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none">${ICON.google}Continuar con Google</a>`;
+  }
+  function bindGoogleButton(el) {
+    el.onclick = (e) => {
+      if (!driveReady()) { e.preventDefault(); toast('La conexión con Google todavía no está configurada.'); return; }
+      drive.pendingSession = randomId(); drive.sessionAt = Date.now(); saveDrive();
+      el.href = authUrl(drive.pendingSession);
+      el.target = '_blank'; el.rel = 'noopener';
+      setTimeout(waitingSheet, 400);
+      startClaimLoop();
+    };
+  }
+
   function openDriveConnect() {
-    if (!driveReady()) { toast('La conexión con Google todavía no está configurada.'); return; }
     openSheet({
       title: 'Copia en Google Drive', right: '',
       render(body) {
-        body.innerHTML = `<p class="footnote" style="font-size:15px;color:var(--label);margin:0">Cada cambio se guarda solo en tu Google Drive, cifrado con una contraseña que elegís vos. Sin la contraseña nadie puede leer esas copias, ni siquiera Google.</p>
-          <p class="label-sm">Contraseña de copias</p>
-          ${passwordFields(true)}
-          <label class="field-group field" style="justify-content:space-between;gap:12px"><span style="font-size:15px">Entiendo que si la olvido, las copias no se pueden recuperar</span><span class="switch"><input type="checkbox" id="pw-ok"><span></span></span></label>
-          <p class="footnote" style="margin-top:-8px">Guardala en el administrador de contraseñas del teléfono. Si ya tenés copias de otro teléfono, poné la misma contraseña.</p>
-          <a class="btn" id="g-go" href="#" role="button" style="display:flex;align-items:center;justify-content:center;gap:10px;text-decoration:none">${ICON.google}Continuar con Google</a>
-          <p class="footnote" style="margin-top:-6px">Google te va a pedir permiso para que la app guarde sus propios datos en tu Drive. La app no puede ver tus otros archivos.</p>`;
-        $('#g-go').onclick = (e) => {
-          const p1 = $('#pw1').value, p2 = $('#pw2').value;
-          let msg = '';
-          if (p1.length < 8) msg = 'La contraseña tiene que tener al menos 8 caracteres.';
-          else if (p1 !== p2) msg = 'Las contraseñas no coinciden.';
-          else if (!$('#pw-ok').checked) msg = 'Confirmá que entendés que la contraseña no se puede recuperar.';
-          if (msg) { e.preventDefault(); toast(msg); return; }
-          pendingPassword = p1;
-          drive.pendingSession = randomId(); drive.sessionAt = Date.now(); saveDrive();
-          e.currentTarget.href = authUrl(drive.pendingSession);
-          e.currentTarget.target = '_blank'; e.currentTarget.rel = 'noopener';
-          setTimeout(waitingSheet, 400);
-          startClaimLoop();
-        };
+        body.innerHTML = `<p class="footnote" style="font-size:15px;color:var(--label);margin:0">Cada cambio se guarda solo en tu Google Drive, cifrado con una contraseña que elegís después. Sin esa contraseña nadie puede leer las copias, ni siquiera Google.</p>
+          ${googleButton('g-go')}
+          <p class="footnote" style="margin-top:-6px">Google te pide permiso para que la app guarde sus propios datos en una carpeta oculta de tu Drive. La app no puede ver tus otros archivos.</p>`;
+        bindGoogleButton($('#g-go'));
       }
     });
   }
@@ -1224,10 +1234,10 @@
   function waitingSheet() {
     openSheet({
       title: 'Conectando con Google', right: '',
-      onLeft() { stopClaim(); drive.pendingSession = null; saveDrive(); closeSheet(); },
+      onLeft() { stopClaim(); drive.pendingSession = null; saveDrive(); closeSheet(); if (needsOnboarding()) setTimeout(openWelcome, 420); },
       render(body) {
         body.innerHTML = `<div class="listen"><div class="orb live" style="width:72px;height:72px">${ICON.cloud}</div>
-          <div class="status">Elegí tu cuenta y tocá “Continuar” en la pantalla de Google. Después volvé a esta app.</div>
+          <div class="status">Elegí tu cuenta y tocá “Continuar” en la pantalla de Google. Cuando diga “Listo”, volvé a esta app.</div>
           <a class="link-btn" href="${esc(authUrl(drive.pendingSession))}" target="_blank" rel="noopener">Abrir Google de nuevo</a></div>`;
       }
     });
@@ -1256,54 +1266,52 @@
     claiming = false;
   }
 
+  // Después de Google: si ya hay copias, pide la contraseña con la que se crearon; si no, que elija una.
   async function afterGoogle() {
     try {
       const about = await gfetch('GET', 'https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)');
       drive.email = about && about.user && about.user.emailAddress; saveDrive();
     } catch (e) { /* el mail es sólo informativo */ }
     let env = null;
-    try { env = await readMain(); } catch (e) { toast('No pude leer tu Drive. Probá de nuevo.'); return; }
-    if (!env) {
-      if (!pendingPassword) return askPassword(null);
-      await setVaultKey(await Vault.newKey(pendingPassword));
-      pendingPassword = null;
-      toast('Copia en Drive activada');
-      closeSheet(); go('settings');
-      if (db.movs.length) scheduleSync(200);
-      return;
-    }
-    if (!pendingPassword) return askPassword(env);
-    const k = await Vault.keyForEnvelope(pendingPassword, env);
-    pendingPassword = null;
-    try {
-      const remote = await Vault.open(k, env);
-      await setVaultKey(k);
-      chooseData(remote, env.savedAt);
-    } catch (e) { askPassword(env, true); }
+    try { env = await readMain(); } catch (e) { toast('No pude leer tu Drive. Probá de nuevo desde Ajustes.'); return; }
+    askPassword(env);
   }
 
-  // Pide la contraseña cuando ya hay copias (teléfono nuevo) o cuando se perdió la clave en este teléfono.
+  // Si este teléfono perdió la clave: vuelve a pedirla (o a elegirla si todavía no hay copias).
+  async function ensurePassword() {
+    try { askPassword(await readMain()); } catch (e) { toast(e.message === 'reauth' ? 'Volvé a conectar tu cuenta de Google.' : 'No pude leer tu Drive. Revisá internet.'); }
+  }
+
   function askPassword(env, wrong) {
+    const first = !env;
     openSheet({
-      title: env ? 'Tu contraseña de copias' : 'Elegí una contraseña', right: 'Continuar',
-      onLeft() { closeSheet(); go('settings'); },
+      title: first ? 'Último paso' : 'Tu contraseña de copias', right: 'Listo',
+      onLeft() { closeSheet(); if (!needsOnboarding()) go('settings'); },
       render(body) {
         body.innerHTML = `${wrong ? `<div class="banner" style="margin:0">${ICON.warn}<div>Esa contraseña no abre tus copias. Probá de nuevo.</div></div>` : ''}
-          <p class="footnote" style="font-size:15px;color:var(--label);margin:0">${env ? `Tu Drive ya tiene copias${env.savedAt ? ' (la última del ' + esc(new Date(env.savedAt).toLocaleDateString('es-AR')) + ')' : ''}. Ingresá la contraseña con la que las creaste.` : 'Elegí la contraseña con la que se cifran tus copias.'}</p>
-          ${passwordFields(!env)}
-          ${env ? '<button class="link-btn" id="pw-reset" style="justify-self:start;padding:0;color:var(--expense)">La olvidé: empezar de cero</button>' : ''}`;
+          ${drive.email ? `<p class="footnote" style="margin:0">Conectado como <strong>${esc(drive.email)}</strong></p>` : ''}
+          <p class="footnote" style="font-size:15px;color:var(--label);margin:0">${first
+            ? 'Elegí una contraseña para cifrar tus copias. Te la vamos a pedir sólo si cambiás de teléfono.'
+            : `Tu Drive ya tiene copias${env.savedAt ? ' (la última del ' + esc(new Date(env.savedAt).toLocaleDateString('es-AR')) + ')' : ''}. Ingresá la contraseña con la que las creaste.`}</p>
+          ${passwordFields(first)}
+          ${first ? `<label class="field-group field" style="justify-content:space-between;gap:12px"><span style="font-size:15px">Entiendo que si la olvido, las copias no se pueden recuperar</span><span class="switch"><input type="checkbox" id="pw-ok"><span></span></span></label>
+          <p class="footnote" style="margin-top:-8px">Guardala en el administrador de contraseñas del teléfono o anotala en un lugar seguro.</p>` : '<button class="link-btn" id="pw-reset" style="justify-self:start;padding:0;color:var(--expense)">La olvidé: empezar de cero</button>'}`;
         setTimeout(() => $('#pw1') && $('#pw1').focus(), 420);
         const reset = $('#pw-reset');
         if (reset) reset.onclick = () => resetCopies();
       },
       async onRight() {
         const p1 = $('#pw1').value;
-        if (p1.length < 8) { toast('Mínimo 8 caracteres'); return; }
-        if (!env) {
+        if (p1.length < 8) { toast('La contraseña tiene que tener al menos 8 caracteres'); return; }
+        if (first) {
           if (p1 !== $('#pw2').value) { toast('Las contraseñas no coinciden'); return; }
+          if (!$('#pw-ok').checked) { toast('Confirmá que entendés que no se puede recuperar'); return; }
+          $('#sheet-right').disabled = true;
           await setVaultKey(await Vault.newKey(p1));
-          drive.lastError = null; saveDrive(); closeSheet(); go('settings'); scheduleSync(200);
-          toast('Contraseña guardada');
+          drive.lastError = null; saveDrive();
+          markOnboarded(); closeSheet(); go('movs');
+          if (db.movs.length) scheduleSync(200);
+          toast('Todo listo. Tocá el micrófono para cargar tu primer movimiento.');
           return;
         }
         $('#sheet-right').disabled = true;
@@ -1312,9 +1320,67 @@
           const remote = await Vault.open(k, env);
           await setVaultKey(k);
           if (drive.lastError === 'nokey') drive.lastError = null;
-          saveDrive();
+          saveDrive(); markOnboarded();
           chooseData(remote, env.savedAt);
         } catch (e) { askPassword(env, true); }
+      }
+    });
+  }
+
+  // ---------- Bienvenida (una sola vez) ----------
+  const ONB_KEY = 'finanzas-voz:onboarded';
+  const isOnboarded = () => { try { return !!localStorage.getItem(ONB_KEY); } catch (e) { return true; } };
+  function markOnboarded() { try { localStorage.setItem(ONB_KEY, new Date().toISOString()); } catch (e) { /* sin almacenamiento */ } }
+  function needsOnboarding() { return !isOnboarded() && !driveOn() && !db.movs.length; }
+
+  function installHint() {
+    const standalone = (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone;
+    if (standalone) return '';
+    const ios = /iPhone|iPad|iPod/.test(navigator.userAgent);
+    return `<p class="footnote" style="text-align:center;margin:0">Tip: instalala como app. ${ios ? 'En Safari: Compartir → “Agregar a inicio”.' : 'En Chrome: menú ⋮ → “Instalar app”.'}</p>`;
+  }
+
+  function openWelcome() {
+    openSheet({
+      title: '', left: '', right: '',
+      render(body) {
+        body.innerHTML = `<div class="welcome">
+            <img src="icons/icon.svg" alt="" class="welcome-logo" width="88" height="88">
+            <h2>Bienvenido a Mis Finanzas</h2>
+            <p>Decile a la app en qué gastaste o cuánto cobraste. Ella anota el monto, la categoría, el medio de pago y la fecha.</p>
+          </div>
+          <div class="welcome-points">
+            <div><span class="wp-ic" style="background:var(--accent)">${ICON.mic}</span><span><strong>Hablá y listo.</strong> “Gasté 12 mil en nafta con débito.”</span></div>
+            <div><span class="wp-ic" style="background:#34C759">${ICON.chart}</span><span><strong>Todo ordenado.</strong> Balance del mes, categorías y cuentas.</span></div>
+            <div><span class="wp-ic" style="background:#5856D6">${ICON.lock}</span><span><strong>Tus datos son tuyos.</strong> Nada pasa por servidores ajenos.</span></div>
+          </div>
+          <p class="label-sm">¿Dónde guardamos tus datos?</p>
+          ${googleButton('w-google')}
+          <p class="footnote" style="margin-top:-6px">Copia automática y cifrada en tu Google Drive. Si cambiás o perdés el teléfono, recuperás todo.</p>
+          <button class="btn tinted" id="w-local">Usar sin cuenta</button>
+          ${installHint()}`;
+        bindGoogleButton($('#w-google'));
+        $('#w-local').onclick = openNoAccount;
+      }
+    });
+  }
+
+  function openNoAccount() {
+    openSheet({
+      title: 'Usar sin cuenta', left: 'Atrás', right: '',
+      onLeft: openWelcome,
+      render(body) {
+        body.innerHTML = `<div class="banner" style="margin:0">${ICON.warn}<div><strong>Podés perder tus datos.</strong> Sin cuenta, todo queda guardado sólo en este teléfono.</div></div>
+          <ul class="warn-list">
+            <li>Si perdés o cambiás el teléfono, o se borran los datos del navegador, los movimientos se pierden.</li>
+            <li>No se sincroniza con otros dispositivos.</li>
+            <li>Las copias son manuales: Ajustes → “Guardar copia en el teléfono”. Te lo vamos a recordar cada semana.</li>
+            <li>Podés conectar Google más adelante desde Ajustes, sin perder nada.</li>
+          </ul>
+          ${googleButton('n-google')}
+          <button class="btn tinted" id="n-ok">Entiendo, seguir sin cuenta</button>`;
+        bindGoogleButton($('#n-google'));
+        $('#n-ok').onclick = () => { markOnboarded(); closeSheet(); go('movs'); toast('Listo. Tocá el micrófono para cargar tu primer movimiento.'); };
       }
     });
   }
@@ -1431,7 +1497,7 @@
     const c = $('#drv-connect'); if (c) c.onclick = openDriveConnect;
     const n = $('#drv-now'); if (n) n.onclick = async () => {
       if (drive.lastError === 'reauth') { openDriveConnect(); return; }
-      if (drive.lastError === 'nokey') { restoreFromDrive(); return; }
+      if (drive.lastError === 'nokey') { ensurePassword(); return; }
       drive.pending = true;
       await syncNow();
       toast(drive.lastError ? driveState().text : 'Copia subida a Drive');
@@ -1462,7 +1528,7 @@
   }
 
   // ---------- Inicio ----------
-  const APP_VERSION = '1.2.1';
+  const APP_VERSION = '1.3.0';
   function init() {
     applyTheme();
     $$('.tab').forEach((t) => (t.onclick = () => go(t.dataset.tab)));
@@ -1491,7 +1557,10 @@
     go(['stats', 'accounts', 'settings'].includes(hash) ? hash : 'movs');
     renderDriveStatus();
     retryDrive();
+    if (db.movs.length || driveOn()) markOnboarded(); // usuarios que ya venían usando la app
+    if (!S().firstUse) { S().firstUse = new Date().toISOString(); try { localStorage.setItem(KEY, JSON.stringify(db)); } catch (e) { /* */ } }
     if (new URLSearchParams(location.search).get('voz') === '1') setTimeout(() => openVoice(), 300);
+    else if (needsOnboarding()) setTimeout(openWelcome, 350);
 
     if ('serviceWorker' in navigator && location.protocol === 'https:') {
       navigator.serviceWorker.register('sw.js').catch(() => {});

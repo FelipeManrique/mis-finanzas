@@ -36,6 +36,8 @@
     defaultCurrency: 'ARS',
     budget: 0,
     theme: 'auto',
+    glass: 0.35,
+    bigText: false,
     methods: ['Efectivo', 'Débito', 'Crédito', 'Transferencia', 'Mercado Pago'],
     initialBalances: {},
     categories: clone(Parser.DEFAULT_CATEGORIES),
@@ -50,7 +52,11 @@
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const d = JSON.parse(raw);
-        return { movs: Array.isArray(d.movs) ? d.movs : [], settings: Object.assign(DEFAULT_SETTINGS(), d.settings || {}) };
+        const settings = Object.assign(DEFAULT_SETTINGS(), d.settings || {});
+        const NEW = { '#007AFF': '#0088FF', '#FF3B30': '#FF383C', '#FF9500': '#FF8D28', '#5856D6': '#6155F5', '#AF52DE': '#CB30E0',
+          '#30B0C7': '#00C3D0', '#64D2FF': '#00C0E8', '#A2845E': '#AC7F5E', '#D4A017': '#FFCC00', '#FF6482': '#FF2D55' };
+        ['gasto', 'ingreso'].forEach((t) => (settings.categories[t] || []).forEach((c) => { if (NEW[c.color]) c.color = NEW[c.color]; }));
+        return { movs: Array.isArray(d.movs) ? d.movs : [], settings };
       }
     } catch (e) { console.warn('No pude leer los datos guardados', e); }
     return { movs: [], settings: DEFAULT_SETTINGS() };
@@ -239,7 +245,7 @@
     const c = catInfo(m.type, m.category);
     const sub = [m.category, m.method, m.installments ? m.installments + ' cuotas' : null].filter(Boolean).join(' · ');
     return `<button class="row" data-id="${esc(m.id)}">
-      <span class="badge" style="background:${esc(c.color)}" aria-hidden="true">${esc((m.category || '?').charAt(0).toUpperCase())}</span>
+      <span class="badge" style="--c:${esc(c.color)}" aria-hidden="true">${esc((m.category || '?').charAt(0).toUpperCase())}</span>
       <span class="mid"><span class="t">${esc(m.description || m.category)}</span>
       <span class="s">${m.source === 'voz' ? `<span class="mic-tag" title="Cargado con la voz">${ICON.quote}</span>` : ''}${esc(sub)}</span></span>
       <span class="amt num ${m.type === 'ingreso' ? 'in' : ''}">${money(m.type === 'ingreso' ? m.amount : -m.amount, m.currency, m.type === 'ingreso')}</span>
@@ -309,7 +315,7 @@
       <div class="stat"><span class="k">Gasto por día</span><span class="v num">${daysElapsed ? money(Math.round(t.out / daysElapsed)) : '—'}</span><span class="d">promedio del mes</span></div>
       <div class="stat"><span class="k">Vs. mes anterior</span><span class="v num">${cmp}</span><span class="d">en gastos (${esc(monthShort(shiftMonth(ui.month, -1)))}: ${money(prevT.out)})</span></div>
       <div class="stat"><span class="k">Mayor gasto</span><span class="v num">${biggest ? money(biggest.amount) : '—'}</span><span class="d">${biggest ? esc(biggest.description || biggest.category) : 'sin gastos'}</span></div>
-      <div class="stat"><span class="k">Medio más usado</span><span class="v">${topMethod ? esc(topMethod[0]) : '—'}</span><span class="d num">${topMethod ? money(topMethod[1]) : 'sin gastos'}</span></div>
+      <div class="stat"><span class="k">Medio más usado</span><span class="v txt">${topMethod ? esc(topMethod[0]) : '—'}</span><span class="d num">${topMethod ? money(topMethod[1]) : 'sin gastos'}</span></div>
     </div>`;
 
     const block = (type, title) => {
@@ -331,7 +337,7 @@
     html += block('gasto', 'Gastos por categoría');
     html += block('ingreso', 'Ingresos por categoría');
     html += `<h2 class="section-title">Últimos 6 meses</h2><div class="card chart">${barChart()}
-      <div class="legend"><span><i style="background:var(--income)"></i>Ingresos</span><span><i style="background:var(--expense)"></i>Gastos</span></div></div>
+      <div class="legend"><span><i style="background:var(--income-fill)"></i>Ingresos</span><span><i style="background:var(--expense-fill)"></i>Gastos</span></div></div>
       <p class="footnote">Montos en pesos. Los movimientos en dólares se muestran aparte en el resumen.</p>`;
     el.innerHTML = html;
     $$('.catbar', el).forEach((b) => (b.onclick = () => { ui.cat = b.dataset.cat; ui.type = b.dataset.type; ui.q = ''; $('#q').value = ''; go('movs'); }));
@@ -365,8 +371,8 @@
     data.forEach((d, i) => {
       const cx = L + cw * i + cw / 2;
       const hi = (d.in / max) * ch, ho = (d.out / max) * ch;
-      if (hi > 0) s += `<rect x="${cx - bw - 1}" y="${T + ch - hi}" width="${bw}" height="${hi}" rx="3" fill="var(--income)"><title>${esc(monthName(d.ym))} · ingresos ${esc(money(d.in))}</title></rect>`;
-      if (ho > 0) s += `<rect x="${cx + 1}" y="${T + ch - ho}" width="${bw}" height="${ho}" rx="3" fill="var(--expense)"><title>${esc(monthName(d.ym))} · gastos ${esc(money(d.out))}</title></rect>`;
+      if (hi > 0) s += `<rect x="${cx - bw - 1}" y="${T + ch - hi}" width="${bw}" height="${hi}" rx="3" fill="var(--income-fill)"><title>${esc(monthName(d.ym))} · ingresos ${esc(money(d.in))}</title></rect>`;
+      if (ho > 0) s += `<rect x="${cx + 1}" y="${T + ch - ho}" width="${bw}" height="${ho}" rx="3" fill="var(--expense-fill)"><title>${esc(monthName(d.ym))} · gastos ${esc(money(d.out))}</title></rect>`;
       s += `<text x="${cx}" y="${H - 6}" text-anchor="middle" style="${d.ym === ui.month ? 'font-weight:600;fill:var(--label)' : ''}">${esc(monthShort(d.ym))}</text>`;
     });
     return s + '</svg>';
@@ -437,6 +443,9 @@
           <input type="text" class="inline num" id="set-budget" inputmode="decimal" value="${esc(amountInputValue(+st.budget || 0))}"></label>
         <label class="item"><span class="grow">Apariencia</span>
           <select id="set-theme"><option value="auto" ${st.theme === 'auto' ? 'selected' : ''}>Automática</option><option value="light" ${st.theme === 'light' ? 'selected' : ''}>Clara</option><option value="dark" ${st.theme === 'dark' ? 'selected' : ''}>Oscura</option></select></label>
+        <div class="item stack"><span>Vidrio<span class="sub">Más transparente o más fácil de leer</span></span>
+          <label class="range-row"><span>Transparente</span><input type="range" id="set-glass" min="0" max="1" step="0.05" value="${+st.glass}" aria-label="Transparencia del vidrio"><span>Opaco</span></label></div>
+        <label class="item"><span class="grow">Letra grande<span class="sub">Agranda textos y botones</span></span><span class="switch"><input type="checkbox" id="set-big" ${st.bigText ? 'checked' : ''}><span></span></span></label>
       </div>
 
       <h2 class="section-title">Categorías y medios</h2>
@@ -464,6 +473,9 @@
     $('#set-method').onchange = (e) => { st.defaultMethod = e.target.value; save(); };
     $('#set-budget').onchange = (e) => { st.budget = Math.max(0, parseAmount(e.target.value) || 0); e.target.value = amountInputValue(st.budget); save(); };
     $('#set-theme').onchange = (e) => { st.theme = e.target.value; save(); applyTheme(); };
+    $('#set-glass').oninput = (e) => { st.glass = +e.target.value; applyTheme(); };
+    $('#set-glass').onchange = () => save();
+    $('#set-big').onchange = (e) => { st.bigText = e.target.checked; save(); applyTheme(); };
     $('#set-try').onclick = () => openVoice({ textMode: true });
     $('#set-cat-g').onclick = () => manageCategories('gasto');
     $('#set-cat-i').onclick = () => manageCategories('ingreso');
@@ -479,6 +491,11 @@
     const t = S().theme;
     if (t === 'auto') document.documentElement.removeAttribute('data-theme');
     else document.documentElement.setAttribute('data-theme', t);
+    const root = document.documentElement.style;
+    root.setProperty('--glass-tint', String(Math.min(1, Math.max(0, S().glass ?? 0.35))));
+    root.setProperty('--ui-zoom', S().bigText ? '1.15' : '1');
+    const meta = document.querySelectorAll('meta[name="theme-color"]');
+    meta.forEach((m) => m.setAttribute('content', /dark/.test(m.media) ? '#05070F' : '#EEF3FA'));
   }
 
   // ---------- Categorías ----------
@@ -489,7 +506,7 @@
       onLeft() { closeSheet(); renderAll(); },
       onRight() { editCategory(type, null); },
       render(body) {
-        body.innerHTML = `<div class="list">${list.map((c, i) => `<button class="item" data-i="${i}"><span class="badge" style="background:${esc(c.color)};width:28px;height:28px;border-radius:8px;font-size:13px">${esc(c.name.charAt(0))}</span>
+        body.innerHTML = `<div class="list">${list.map((c, i) => `<button class="item" data-i="${i}"><span class="badge" style="--c:${esc(c.color)};width:30px;height:30px;border-radius:9px;font-size:13px">${esc(c.name.charAt(0))}</span>
           <span class="grow">${esc(c.name)}<span class="sub">${c.kw.length ? esc(c.kw.slice(0, 6).join(', ')) + (c.kw.length > 6 ? '…' : '') : 'Sin palabras clave'}</span></span>
           <svg class="chev" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m9 5 7 7-7 7"/></svg></button>`).join('')}</div>
           <p class="footnote">La última categoría de la lista se usa cuando la app no reconoce ninguna palabra clave.</p>`;
@@ -560,7 +577,7 @@
             save();
           }));
           $$('[data-del]', body).forEach((b) => (b.onclick = () => {
-            if (!b.classList.contains('armed')) { b.classList.add('armed'); b.style.background = 'var(--expense)'; b.style.color = '#fff'; return; }
+            if (!b.classList.contains('armed')) { b.classList.add('armed'); b.style.background = 'var(--expense-fill)'; b.style.color = '#fff'; return; }
             const i = +b.dataset.del, old = st.methods[i];
             st.methods.splice(i, 1);
             if (st.defaultMethod === old) st.defaultMethod = st.methods[0];
@@ -1350,9 +1367,9 @@
             <p>Decile a la app en qué gastaste o cuánto cobraste. Ella anota el monto, la categoría, el medio de pago y la fecha.</p>
           </div>
           <div class="welcome-points">
-            <div><span class="wp-ic" style="background:var(--accent)">${ICON.mic}</span><span><strong>Hablá y listo.</strong> “Gasté 12 mil en nafta con débito.”</span></div>
-            <div><span class="wp-ic" style="background:#34C759">${ICON.chart}</span><span><strong>Todo ordenado.</strong> Balance del mes, categorías y cuentas.</span></div>
-            <div><span class="wp-ic" style="background:#5856D6">${ICON.lock}</span><span><strong>Tus datos son tuyos.</strong> Nada pasa por servidores ajenos.</span></div>
+            <div><span class="wp-ic" style="background-color:var(--accent)">${ICON.mic}</span><span><strong>Hablá y listo.</strong> “Gasté 12 mil en nafta con débito.”</span></div>
+            <div><span class="wp-ic" style="background-color:#34C759">${ICON.chart}</span><span><strong>Todo ordenado.</strong> Balance del mes, categorías y cuentas.</span></div>
+            <div><span class="wp-ic" style="background-color:#6155F5">${ICON.lock}</span><span><strong>Tus datos son tuyos.</strong> Nada pasa por servidores ajenos.</span></div>
           </div>
           <p class="label-sm">¿Dónde guardamos tus datos?</p>
           ${googleButton('w-google')}
@@ -1528,7 +1545,7 @@
   }
 
   // ---------- Inicio ----------
-  const APP_VERSION = '1.3.0';
+  const APP_VERSION = '2.0.0';
   function init() {
     applyTheme();
     $$('.tab').forEach((t) => (t.onclick = () => go(t.dataset.tab)));

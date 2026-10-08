@@ -1,6 +1,6 @@
 /* Mis Finanzas — Copyright (c) 2026 Felipe Manrique. Todos los derechos reservados. Ver LICENSE. */
 // Cache de la app para que abra sin conexión. Subí VERSION en cada deploy.
-const VERSION = 'finanzas-v2.0.0';
+const VERSION = 'finanzas-v2.0.1';
 const SHELL = ['./', 'index.html', 'styles.css', 'parser.js', 'vault.js', 'app.js', 'privacidad.html', 'manifest.webmanifest', 'icons/icon.svg', 'icons/icon-180.png', 'icons/icon-192.png', 'icons/icon-512.png', 'icons/icon-maskable-512.png', 'icons/icon-32.png'];
 
 self.addEventListener('install', (e) => {
@@ -14,7 +14,9 @@ self.addEventListener('activate', (e) => {
 // Red primero (para recibir actualizaciones), cache si no hay conexión.
 self.addEventListener('fetch', (e) => {
   const req = e.request;
-  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin || new URL(req.url).pathname.endsWith('oauth.html')) return;
+  const path = new URL(req.url).pathname;
+  // íconos, manifiesto y retorno de Google siempre directo de la red (el iPhone los pide al agregar a inicio)
+  if (req.method !== 'GET' || new URL(req.url).origin !== location.origin || /oauth\.html$|\.webmanifest$|\/icons\/|apple-touch-icon/.test(path)) return;
   e.respondWith(
     fetch(req).then((res) => {
       if (res.ok) { const copy = res.clone(); caches.open(VERSION).then((c) => c.put(req, copy)); }

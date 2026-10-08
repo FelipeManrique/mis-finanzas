@@ -982,7 +982,7 @@
   // nunca recibe los datos financieros.
   const GOOGLE_CLIENT_ID = '872037994128-cjgsu37c3mh7cdlsk9ic9l9f03f75agf.apps.googleusercontent.com';
   const BROKER_URL = 'https://script.google.com/macros/s/AKfycbzqMyt30WtQnaUyPxk6SOzmhvmL7Dzp_A6Y1QLTYwAUdyH89j1SoiD54lMbqLWtX_Sv/exec';
-  const REDIRECT_URI = new URL('oauth.html', location.href.split('#')[0].replace(/[^/]*$/, '')).href;
+  const REDIRECT_URI = 'https://felipemanrique.github.io/mis-finanzas/oauth.html'; // registrada en Google Cloud y en el intermediario
   const SCOPE = 'https://www.googleapis.com/auth/drive.appdata';
   const DRIVE_KEY = 'finanzas-voz:cloud';
   const MAIN_FILE = 'finanzas.enc.json';

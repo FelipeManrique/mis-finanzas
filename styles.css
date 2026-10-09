@@ -348,7 +348,8 @@ button.item:active, a.item:active { background: var(--fill); }
 .sheet-head .txt-btn { border: 0; background: none; color: var(--accent-ink); font-size: 17px; padding: 8px 4px; justify-self: start; }
 .sheet-head .txt-btn.strong { font-weight: 600; justify-self: end; }
 .sheet-head .txt-btn:disabled { color: var(--label-3); }
-.sheet-body { overflow-y: auto; padding: 4px 16px calc(env(safe-area-inset-bottom, 0px) + 24px); -webkit-overflow-scrolling: touch; display: grid; gap: 16px; overscroll-behavior: contain; }
+.sheet-body { overflow-y: auto; padding: 4px 16px calc(env(safe-area-inset-bottom, 0px) + 24px); -webkit-overflow-scrolling: touch; display: grid; gap: 16px; overscroll-behavior: contain;
+  grid-auto-rows: max-content; align-content: start; } /* las tarjetas no se achican: si no entra, se desplaza */
 /* dentro de la hoja: tarjetas translúcidas sin blur propio (un vidrio no refracta a través de otro) */
 .sheet .card, .sheet .group, .sheet .banner, .sheet .warn-list, .sheet .welcome-points, .sheet .field-group,
 .sheet .said, .sheet .review-card, .sheet .text-entry textarea, .sheet .list, .sheet .cat-chips button, .sheet .examples button {
